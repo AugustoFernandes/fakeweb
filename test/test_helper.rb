@@ -69,6 +69,17 @@ module FakeWebTestHelper
     setup_expectations_for_real_request(defaults.merge(options))
   end
 
+  def setup_basic_response_for_request(options = {})
+    defaults = { :host => "www.google.com", :port => 80, :method => "GET",
+                 :path => "", :response_code => 200, :response_message => "OK",
+                 :response_body => "Google" }
+    options = defaults.merge(options)
+
+    socket = stub("TCPSocket", :closed? => false, :close => true, :write => 100)
+    Socket.stubs(:===).returns(true)
+    TCPSocket.stubs(:open).returns(socket)
+    socket.stubs(:sysread).returns("HTTP/1.1 #{options[:response_code]} #{options[:response_message]}\nContent-Length: #{options[:response_body].length}\n\n#{options[:response_body]}")
+  end
 end
 
 Test::Unit::TestCase.send(:include, FakeWebTestHelper)

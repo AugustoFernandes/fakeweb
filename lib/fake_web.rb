@@ -1,4 +1,5 @@
 require 'singleton'
+require 'digest/md5'
 
 require 'fake_web/ext/net_http'
 require 'fake_web/registry'
@@ -6,6 +7,7 @@ require 'fake_web/response'
 require 'fake_web/responder'
 require 'fake_web/stub_socket'
 require 'fake_web/utility'
+require 'fake_web/fixture'
 
 module FakeWeb
 
@@ -39,6 +41,35 @@ module FakeWeb
   # if an exception is raised for these requests.
   def self.allow_net_connect?
     @allow_net_connect
+  end
+
+  class << self
+    attr_reader :fixture_path
+    alias generate_fixtures? fixture_path
+
+    # Puts FakeWeb into generate_fixtures? mode wherein all responses are
+    # are saved into the provided directory +path+.
+    # You can later load the saved fixtures with +register_fixtures+
+    def generate_fixtures(path)
+      self.allow_net_connect = true
+      raise RuntimeError, "The path: #{path} is not a directory" unless File.directory? path
+      @fixture_path = path
+    end
+
+    # Loads the *.fixture files in the provided +path+ and registers the url
+    # and response objects for each fixture.
+    # Stops fixture generation such that FakeWeb.generate_fixtures? returns
+    # false
+    def register_fixtures(path)
+      stop_generating_fixtures!
+      Fixture.register(path)
+    end
+
+    # Disables fixture generation such that FakeWeb.generate_fixtures?
+    # returns false.
+    def stop_generating_fixtures!
+      @fixture_path = nil
+    end
   end
 
   # This exception is raised if you set <tt>FakeWeb.allow_net_connect =

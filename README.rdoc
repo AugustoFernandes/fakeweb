@@ -144,6 +144,29 @@ simply add the header as an option to +register_uri+:
 
 This sets the "Content-Type" header in the response.
 
+=== Automatically saving responses as fixtures
+
+If your test suite makes many requests it can become tedious registering a uri for
+every request. You can put FakeWeb into fixture generation mode where every
+request made will save a fixture to the provided path. After generating fixtures
+for all of your requests you can tell FakeWeb to load your fixtures and it will
+register all of your requests to the appropriate response.
+
+  FakeWeb.generate_fixture("spec/web_fixtures") # save responses as a fixture
+  FakeWeb.register_fixture("spec/web_fixtures") # FakeWeb.register each fixture
+
+Add this to your spec/spec_helper to help generate and load fixtures:
+
+  FakeWeb.generate_fixtures 'spec/web_fixtures' if ENV['FAKEWEB_FIXTURES']
+
+  unless FakeWeb.generate_fixtures?
+    FakeWeb.register_fixtures 'spec/web_fixtures'
+    FakeWeb.allow_net_connect = false
+  end
+
+Then run this in the console to generate fixtures:
+  rake spec FAKEWEB_FIXTURES=true
+
 == More info
 
 FakeWeb lets you decouple your test environment from live services without

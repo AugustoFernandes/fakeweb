@@ -55,7 +55,12 @@ module Net  #:nodoc: all
         FakeWeb.response_for(method, uri, &block)
       elsif FakeWeb.allow_net_connect?
         connect_without_fakeweb
-        request_without_fakeweb(request, body, &block)
+        response = request_without_fakeweb(request, body, &block)
+        if path = FakeWeb.generate_fixtures?
+          fixture_response = block_given? ? request_without_fakeweb(request, body) : response
+          FakeWeb::Fixture.new(path, method, uri, fixture_response).save
+        end
+        response
       else
         uri = FakeWeb::Utility.strip_default_port_from_uri(uri)
         raise FakeWeb::NetConnectNotAllowedError,
