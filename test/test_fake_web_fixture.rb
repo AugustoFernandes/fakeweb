@@ -9,9 +9,7 @@ class TestFakeWebFixture < Test::Unit::TestCase
 
   def test_register_fixtures_in_path
     fixture = mock(:register => true)
-    file = stub
-    Marshal.expects(:load).with(file).returns(fixture)
-    File.expects(:open).with('file').returns(file)
+    YAML.expects(:load_file).with('file').returns(fixture)
     Dir.expects(:glob).yields('file')
     FakeWeb::Fixture.register(@path)
   end
@@ -34,11 +32,9 @@ class TestFakeWebFixture < Test::Unit::TestCase
   end
 
   def test_save
-    dump = stub
-    Marshal.expects(:dump).with(@fixture).returns(dump)
     file = stub
-    file.expects(:write).with(dump)
     File.expects(:open).with(@fixture.file_name, 'w').yields(file)
+    file.expects(:write).with(@fixture.to_yaml)
     @fixture.save
   end
 end

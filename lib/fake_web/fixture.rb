@@ -4,7 +4,7 @@ module FakeWeb
 
     def self.register(path)
       Dir.glob("#{path}/*.fixture") do |name|
-        fixture = Marshal.load File.open(name)
+        fixture = YAML.load_file name
         fixture.register
       end
     end
@@ -27,7 +27,7 @@ module FakeWeb
     def save
       Dir.chdir path do
         File.open(file_name, 'w') do |f|
-          f.write Marshal.dump(self)
+          f.write self.to_yaml
         end
       end
     end
