@@ -19,7 +19,6 @@ module FakeWeb
     end
 
     def registered_uri?(method, uri)
-      normalized_uri = normalize_uri(uri)
       !responses_for(method, uri).empty?
     end
 
@@ -45,37 +44,62 @@ module FakeWeb
     def responses_for(method, uri)
       uri = normalize_uri(uri)
 
-      if uri_map[uri].has_key?(method)
-        uri_map[uri][method]
-      elsif uri_map[uri].has_key?(:any)
-        uri_map[uri][:any]
-      elsif uri_map_matches?(method, uri)
-        uri_map_matches(method, uri)
-      elsif uri_map_matches(:any, uri)
-        uri_map_matches(:any, uri)
-      else
-        []
-      end
+      uri_map_matches(method, uri, URI) ||
+      uri_map_matches(:any,   uri, URI) ||
+      uri_map_matches(method, uri, Regexp) ||
+      uri_map_matches(:any,   uri, Regexp) ||
+      []
     end
 
-    def uri_map_matches?(method, uri)
-      !uri_map_matches(method, uri).nil?
-    end
-
-    def uri_map_matches(method, uri)
-      uri = normalize_uri(uri.to_s).to_s
-      uri = Utility.strip_default_port_from_uri(uri)
+    def uri_map_matches(method, uri, type_to_check = URI)
+      uris_to_check = variations_of_uri_as_strings(uri)
 
       matches = uri_map.select { |registered_uri, method_hash|
-        registered_uri.is_a?(Regexp) && uri.match(registered_uri) && method_hash.has_key?(method)
+        registered_uri.is_a?(type_to_check) && method_hash.has_key?(method)
+      }.select { |registered_uri, method_hash|
+        if type_to_check == URI
+          uris_to_check.include?(registered_uri.to_s)
+        elsif type_to_check == Regexp
+          uris_to_check.any? { |u| u.match(registered_uri) }
+        end
       }
 
       if matches.size > 1
-        raise MultipleMatchingRegexpsError,
-          "More than one regular expression matched this request: #{method.to_s.upcase} #{uri}"
+        raise MultipleMatchingURIsError,
+          "More than one registered URI matched this request: #{method.to_s.upcase} #{uri}"
       end
 
       matches.map { |_, method_hash| method_hash[method] }.first
+    end
+
+
+    def variations_of_uri_as_strings(uri_object)
+      uris = []
+      normalized_uri = normalize_uri(uri_object)
+
+      # all orderings of query parameters
+      query = normalized_uri.query
+      if query.nil? || query.empty?
+        uris << normalized_uri
+      else
+        FakeWeb::Utility.simple_array_permutation(query.split('&')) do |p|
+          current_permutation = normalized_uri.dup
+          current_permutation.query = p.join('&')
+          uris << current_permutation
+        end
+      end
+
+      uri_strings = uris.map { |uri| uri.to_s }
+
+      # including and omitting the default port
+      if normalized_uri.default_port == normalized_uri.port
+        uri_strings += uris.map { |uri|
+          uri.to_s.sub(/#{Regexp.escape(normalized_uri.request_uri)}$/,
+                       ":#{normalized_uri.port}#{normalized_uri.request_uri}")
+        }
+      end
+
+      uri_strings
     end
 
     def normalize_uri(uri)

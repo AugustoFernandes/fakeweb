@@ -39,8 +39,19 @@ class TestRegexes < Test::Unit::TestCase
   def test_requesting_a_uri_that_matches_two_registered_regexes_raises_an_error
     FakeWeb.register_uri(:get, %r|http://example\.com/|, :body => "first")
     FakeWeb.register_uri(:get, %r|http://example\.com/a|, :body => "second")
-    assert_raise FakeWeb::MultipleMatchingRegexpsError do
+    assert_raise FakeWeb::MultipleMatchingURIsError do
       Net::HTTP.start("example.com") { |query| query.get('/a') }
+    end
+  end
+
+  def test_requesting_a_uri_that_matches_two_registered_regexes_with_differently_ordered_query_params_raises_an_error
+    FakeWeb.register_uri(:get, %r[example.com/list\?b=2&a=1], :body => "first")
+    FakeWeb.register_uri(:get, %r[example.com/list\?a=1&b=2], :body => "second")
+    assert_raise FakeWeb::MultipleMatchingURIsError do
+      Net::HTTP.start("example.com") { |query| query.get('/list?a=1&b=2') }
+    end
+    assert_raise FakeWeb::MultipleMatchingURIsError do
+      Net::HTTP.start("example.com") { |query| query.get('/list?b=2&a=1') }
     end
   end
 
@@ -49,7 +60,7 @@ class TestRegexes < Test::Unit::TestCase
     FakeWeb.register_uri(:get, %r|http://example\.com/a|, :body => "second")
     begin
       Net::HTTP.start("example.com") { |query| query.get('/a') }
-    rescue FakeWeb::MultipleMatchingRegexpsError => exception
+    rescue FakeWeb::MultipleMatchingURIsError => exception
     end
     assert exception.message.include?("GET http://example.com/a")
   end
@@ -58,6 +69,36 @@ class TestRegexes < Test::Unit::TestCase
     FakeWeb.register_uri(:get, %r|http://www.example.com:80|, :body => "example")
     assert !FakeWeb.registered_uri?(:get, "https://www.example.com:80")
     assert !FakeWeb.registered_uri?(:get, "http://www.example.com:443")
+  end
+
+  def test_registry_finds_using_non_default_port
+    FakeWeb.register_uri(:get, %r|example\.com:8080|, :body => "example")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:8080/path")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:8080/path")
+  end
+
+  def test_registry_finds_using_default_port_and_http_when_registered_with_explicit_port_80
+    FakeWeb.register_uri(:get, %r|example\.com:80|, :body => "example")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com/path")
+
+    # check other permutations, too
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:80/path")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:8080/path")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:80/path")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:8080/path")
+    assert !FakeWeb.registered_uri?(:get, "https://www.example.com/path")
+  end
+
+  def test_registry_finds_using_default_port_and_https_when_registered_with_explicit_port_443
+    FakeWeb.register_uri(:get, %r|example\.com:443|, :body => "example")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com/path")
+
+    # check other permutations, too
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:443/path")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:44321/path")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:443/path")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:44321/path")
+    assert !FakeWeb.registered_uri?(:get, "http://www.example.com/path")
   end
 
   def test_registry_only_finds_using_default_port_when_registered_without_if_protocol_matches
@@ -80,14 +121,14 @@ class TestRegexes < Test::Unit::TestCase
     assert !FakeWeb.registered_uri?(:get, "https://www.example.com")
   end
 
-  def test_registry_matches_using_any_protocol_and_port_when_registered_without_protocol_or_port
-    FakeWeb.register_uri(:get, %r|www.example.com|, :body => "example")
-    assert FakeWeb.registered_uri?(:get, "http://www.example.com")
-    assert FakeWeb.registered_uri?(:get, "http://www.example.com:80")
-    assert FakeWeb.registered_uri?(:get, "http://www.example.com:443")
-    assert FakeWeb.registered_uri?(:get, "https://www.example.com")
-    assert FakeWeb.registered_uri?(:get, "https://www.example.com:80")
-    assert FakeWeb.registered_uri?(:get, "https://www.example.com:443")
+  def test_registry_matches_using_default_port_for_protocol_when_registered_without_protocol_or_port
+    FakeWeb.register_uri(:get, %r|www.example.com/home|, :body => "example")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com/home")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com/home")
+    assert FakeWeb.registered_uri?(:get, "http://www.example.com:80/home")
+    assert FakeWeb.registered_uri?(:get, "https://www.example.com:443/home")
+    assert !FakeWeb.registered_uri?(:get, "https://www.example.com:80/home")
+    assert !FakeWeb.registered_uri?(:get, "http://www.example.com:443/home")
   end
 
   def test_registry_matches_with_query_params
@@ -100,4 +141,12 @@ class TestRegexes < Test::Unit::TestCase
     assert !FakeWeb.registered_uri?(:get, "http://example.com/list?hash=123&important=2&unimportant=1")
     assert !FakeWeb.registered_uri?(:get, "http://example.com/list?notimportant=1&unimportant=1")
   end
+
+  def test_registry_matches_with_unsorted_query_params
+    FakeWeb.register_uri(:get, %r[example\.com/list\?b=2&a=1], :body => "example")
+    assert FakeWeb.registered_uri?(:get, "http://example.com/list?b=2&a=1")
+    assert FakeWeb.registered_uri?(:get, "http://example.com/list?a=1&b=2")
+    assert FakeWeb.registered_uri?(:get, "https://example.com:443/list?b=2&a=1")
+  end
+
 end
