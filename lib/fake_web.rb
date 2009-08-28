@@ -1,5 +1,4 @@
 require 'singleton'
-require 'digest/md5'
 require 'yaml'
 
 require 'fake_web/ext/net_http'

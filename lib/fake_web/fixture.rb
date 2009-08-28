@@ -34,11 +34,27 @@ module FakeWeb
 
     private
 
-    def generate_file_name
+    def base_file_name
       u = URI.parse(uri)
       path = u.path.gsub(/^\/$/, '').gsub(/\/$/, '').gsub('/', '-')
-      identifier = Digest::MD5.hexdigest(uri)[0..6]
-      "#{method.to_s.upcase}_#{u.host}#{path}_#{identifier}" + ".fixture"
+      "#{method.to_s.upcase}_#{u.host}#{path}"
+    end
+
+    def generate_file_name
+      name = base_file_name + ".fixture"
+      name = next_unique_file_name(name) if File.exists?(File.join(path, name))
+      name
+    end
+
+    def next_unique_file_name(name)
+      path = "."
+      count = 2
+      ext = File.extname(name)
+      while File.exists?(File.join(path, name)) do
+        name = "#{File.basename(name, ext).gsub(/_\d$/, '')}_#{count}#{ext}"
+        count += 1
+      end
+      name
     end
   end
 end
