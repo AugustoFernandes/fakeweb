@@ -14,45 +14,21 @@ class TestFakeWebFixture < Test::Unit::TestCase
     FakeWeb::Fixture.register(@path)
   end
 
-  def test_register_fixture_with_fake_web
-    FakeWeb.expects(:register_uri).with(:get, "http://www.apple.com", :response => @response)
-    @fixture.register
-  end
-
   def test_file_name_without_path
-    assert_equal @fixture.file_name, "GET_www.apple.com.fixture"
+    identifier = Digest::MD5.hexdigest("http://www.apple.com")[0..6]
+    assert_equal @fixture.file_name, "GET_www.apple.com_#{identifier}.fixture"
   end
 
   def test_file_name_with_path_and_querystring
     url = "http://www.apple.com/iphone/why-iphone/?q=iphone&other=i%20phone"
+    identifier = Digest::MD5.hexdigest(url)[0..6]
     fixture = FakeWeb::Fixture.new(@path, :get, url, stub)
-    assert_equal fixture.file_name, "GET_www.apple.com-iphone-why-iphone.fixture"
+    assert_equal fixture.file_name, "GET_www.apple.com-iphone-why-iphone_#{identifier}.fixture"
   end
 
-  def test_duplicate_file_name_increments_number_identifier
-    File.new('GET_www.apple.com.fixture', 'w')
-    assert_equal @fixture.file_name, "GET_www.apple.com_2.fixture"
-    File.unlink('GET_www.apple.com.fixture')
-  end
-
-  def test_unique_file_name_when_integer_does_not_exist
-    File.new('original.txt', 'w')
-
-    fixture = FakeWeb::Fixture.allocate
-    assert_equal fixture.send(:next_unique_file_name, "original.txt"), "original_2.txt"
-
-    File.unlink('original.txt')
-  end
-
-  def test_unique_file_name_when_integer_exists
-    File.new('original.txt', 'w')
-    File.new('original_2.txt', 'w')
-
-    fixture = FakeWeb::Fixture.allocate
-    assert_equal fixture.send(:next_unique_file_name, "original.txt"), "original_3.txt"
-
-    File.unlink('original.txt')
-    File.unlink('original_2.txt')
+  def test_register_fixture_with_fake_web
+    FakeWeb.expects(:register_uri).with(:get, "http://www.apple.com", :response => @response)
+    @fixture.register
   end
 
   def test_save
